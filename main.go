@@ -18,13 +18,13 @@ import (
 
 func main() {
 	// Serve static files (HTML, JS, CSS) from the "static" directory
-	fs := http.FileServer(http.Dir("static"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	fs := http.FileServer(http.Dir("./static"))
+	http.Handle("/", fs)
 
 	// Serve the main HTML file at the root path
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./static/main.html")
-	})
+	// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	// 	http.ServeFile(w, r, "./static/main.html")
+	// })
 
 	// Handle POST requests at /post
 	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
