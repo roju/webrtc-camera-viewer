@@ -39,3 +39,7 @@ window.startSession = () => {
   //   alert(e)
   // }
 }
+
+function sayHello() {
+  alert("hello world");
+}
