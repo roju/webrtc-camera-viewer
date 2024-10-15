@@ -17,7 +17,7 @@ pc.ontrack = function (event) {
   el.autoplay = true
   el.controls = true
 
-  document.getElementById('remoteVideos').appendChild(el)
+  document.getElementById('remoteVideo').appendChild(el)
 }
 
 pc.oniceconnectionstatechange = e => log(pc.iceConnectionState)
@@ -27,9 +27,7 @@ pc.onicecandidate = event => {
   }
 }
 
-// Offer to receive 1 audio, and 2 video tracks
-pc.addTransceiver('audio', {'direction': 'recvonly'})
-pc.addTransceiver('video', {'direction': 'recvonly'})
+// Offer to receive 1 video track
 pc.addTransceiver('video', {'direction': 'recvonly'})
 pc.createOffer().then(d => pc.setLocalDescription(d)).catch(log)
 
