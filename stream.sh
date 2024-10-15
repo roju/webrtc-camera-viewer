@@ -1,5 +1,7 @@
 #!/bin/bash
 
+./webrtc-streamer
+
 gst-launch-1.0 -v v4l2src device=/dev/video0 io-mode=4 \
 ! "video/x-raw,width=1280,height=960" \
 ! queue \
