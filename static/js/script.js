@@ -38,7 +38,17 @@ window.startSession = () => {
   // }
 }
 
-window.sayHello = () => {
-  console.log("hello world");
-  window.alert("hello");
-}
+
+document.getElementById('sendBtn').addEventListener('click', function() {
+  // Send POST request with the string "foo"
+  fetch('/post', {
+      method: 'POST',
+      body: 'foo'
+  })
+  .then(response => response.text())
+  .then(data => {
+      // Display the server's response in the <p> element
+      document.getElementById('response').textContent = data;
+  })
+  .catch(error => console.error('Error:', error));
+});
