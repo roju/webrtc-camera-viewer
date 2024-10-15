@@ -18,7 +18,7 @@ import (
 
 func main() {
 	// Serve static files (HTML, JS, CSS) from the "static" directory
-	fs := http.FileServer(http.Dir("./static"))
+	fs := http.FileServer(http.Dir("static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	// Serve the main HTML file at the root path

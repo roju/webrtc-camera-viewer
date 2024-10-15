@@ -41,5 +41,5 @@ window.startSession = () => {
 }
 
 function sayHello() {
-  alert("hello world");
+  console.log("hello world");
 }
