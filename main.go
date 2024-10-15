@@ -27,31 +27,33 @@ func main() {
 	// })
 
 	// Handle POST requests at /post
-	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, "Unable to read request", http.StatusInternalServerError)
-				return
-			}
-			defer r.Body.Close()
+	// http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
+	// 	if r.Method == http.MethodPost {
+	// 		body, err := io.ReadAll(r.Body)
+	// 		if err != nil {
+	// 			http.Error(w, "Unable to read request", http.StatusInternalServerError)
+	// 			return
+	// 		}
+	// 		defer r.Body.Close()
 
-			// Check if the body contains the string "foo"
-			if string(body) == "foo" {
-				// Respond with "bar"
-				fmt.Fprint(w, "bar")
-			} else {
-				// Respond with a default message if the body is something else
-				http.Error(w, "Invalid request", http.StatusBadRequest)
-			}
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	// 		// Check if the body contains the string "foo"
+	// 		if string(body) == "foo" {
+	// 			// Respond with "bar"
+	// 			fmt.Fprint(w, "bar")
+	// 		} else {
+	// 			// Respond with a default message if the body is something else
+	// 			http.Error(w, "Invalid request", http.StatusBadRequest)
+	// 		}
+	// 	} else {
+	// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	// 	}
+	// })
 
-	// Start the server on port 8080
 	fmt.Println("Server starting on :8080...")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	err := http.ListenAndServe(":8080", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{

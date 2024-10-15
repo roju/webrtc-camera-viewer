@@ -38,6 +38,7 @@ window.startSession = () => {
   // }
 }
 
-function sayHello() {
+window.sayHello = () => {
   console.log("hello world");
+  window.alert("hello");
 }
