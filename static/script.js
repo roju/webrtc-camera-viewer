@@ -1,5 +1,3 @@
-/* eslint-env browser */
-
 let pc = new RTCPeerConnection({
   iceServers: [
     {
