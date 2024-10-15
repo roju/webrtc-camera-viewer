@@ -32,14 +32,10 @@ pc.addTransceiver('video', {'direction': 'recvonly'})
 pc.createOffer().then(d => pc.setLocalDescription(d)).catch(log)
 
 window.startSession = () => {
-  let sd = document.getElementById('remoteSessionDescription').value
-  if (sd === '') {
-    return alert('Session Description must not be empty')
-  }
-
-  try {
-    pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(sd))))
-  } catch (e) {
-    alert(e)
-  }
+  window.alert("startSession button clicked");
+  // try {
+  //   pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(sd))))
+  // } catch (e) {
+  //   alert(e)
+  // }
 }
