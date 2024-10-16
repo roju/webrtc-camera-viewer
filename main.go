@@ -83,11 +83,6 @@ func main() {
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
 
-	// Serve the main HTML file at the root path
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./static/main.html")
-	})
-
 	waitForSessionExchange := sync.WaitGroup{}
 	waitForSessionExchange.Add(1)
 
