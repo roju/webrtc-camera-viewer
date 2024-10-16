@@ -29,6 +29,7 @@ Camera: Radxa Camera 8M 219
 2. Start the streaming server
 
     ```sh
+    chmod +x stream.sh
     ./stream.sh
     ```
 
