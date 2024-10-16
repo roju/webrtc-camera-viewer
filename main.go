@@ -87,9 +87,9 @@ func main() {
 	http.Handle("/", fs)
 
 	waitForSessionExchange := sync.WaitGroup{}
+	waitForSessionExchange.Add(1)
 
 	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
-		waitForSessionExchange.Add(1)
 		if r.Method == http.MethodPost {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
@@ -129,7 +129,7 @@ func main() {
 
 			// Send LocalDescription to browser
 			fmt.Fprint(w, encode(peerConnection.LocalDescription()))
-			// fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
+			fmt.Println("Sent local sd to browser")
 
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -143,7 +143,7 @@ func main() {
 	}
 
 	waitForSessionExchange.Wait()
-	fmt.Printf("Session exchange finished")
+	fmt.Println("Session exchange finished")
 
 	// Read RTP packets forever and send them to the WebRTC Client
 	inboundRTPPacket := make([]byte, 1600) // UDP MTU
