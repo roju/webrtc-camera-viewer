@@ -95,45 +95,40 @@ func main() {
 			defer r.Body.Close()
 			fmt.Println("recv browser sd", string(body))
 
+			offer := webrtc.SessionDescription{}
+			decode(string(body), &offer)
+
+			// Set the remote SessionDescription
+			if err = peerConnection.SetRemoteDescription(offer); err != nil {
+				panic(err)
+			}
+
+			// Create answer
+			answer, err := peerConnection.CreateAnswer(nil)
+			if err != nil {
+				panic(err)
+			}
+
+			// Create channel that is blocked until ICE Gathering is complete
+			// gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+
+			// Sets the LocalDescription, and starts our UDP listeners
+			if err = peerConnection.SetLocalDescription(answer); err != nil {
+				panic(err)
+			}
+
+			// Block until ICE Gathering is complete, disabling trickle ICE
+			// we do this because we only can exchange one signaling message
+			// in a production application you should exchange ICE Candidates via OnICECandidate
+			// <-gatherComplete
+
+			// Send LocalDescription to browser
 			fmt.Fprint(w, "bar")
+			// fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
 
-			/*
+			// Unblock main()
+			waitForSessionExchange <- true
 
-				offer := webrtc.SessionDescription{}
-				decode(string(body), &offer)
-
-				// Set the remote SessionDescription
-				if err = peerConnection.SetRemoteDescription(offer); err != nil {
-					panic(err)
-				}
-
-				// Create answer
-				answer, err := peerConnection.CreateAnswer(nil)
-				if err != nil {
-					panic(err)
-				}
-
-				// Create channel that is blocked until ICE Gathering is complete
-				gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
-
-				// Sets the LocalDescription, and starts our UDP listeners
-				if err = peerConnection.SetLocalDescription(answer); err != nil {
-					panic(err)
-				}
-
-				// Block until ICE Gathering is complete, disabling trickle ICE
-				// we do this because we only can exchange one signaling message
-				// in a production application you should exchange ICE Candidates via OnICECandidate
-				<-gatherComplete
-
-				// Send LocalDescription to browser
-				// fmt.Fprint(w, "bar")
-				// fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
-
-				// Unblock main()
-				waitForSessionExchange <- true
-
-			*/
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
