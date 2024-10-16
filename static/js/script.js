@@ -32,6 +32,8 @@ document.getElementById('viewCamera').addEventListener('click', function() {
   })
   .then(response => response.text())
   .then(data => {
+    console.log('recv sd from cam')
+    console.log(atob(data))
     pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(data))))
   })
   .catch(error => console.error('Error:', error));
