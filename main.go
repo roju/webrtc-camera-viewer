@@ -123,8 +123,8 @@ func main() {
 			<-gatherComplete
 
 			// Send LocalDescription to browser
-			fmt.Fprint(w, encode(peerConnection.LocalDescription()))
-			fmt.Println("sent local sd")
+			fmt.Fprint(w, "bar")
+			fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
 
 			// Unblock main()
 			waitForSessionExchange <- true
