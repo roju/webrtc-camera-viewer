@@ -96,7 +96,6 @@ func main() {
 				http.Error(w, "Unable to read request", http.StatusInternalServerError)
 				return
 			}
-			defer waitForSessionExchange.Done()
 			defer r.Body.Close()
 			fmt.Println("recv browser sd", string(body))
 
@@ -130,6 +129,7 @@ func main() {
 			// Send LocalDescription to browser
 			fmt.Fprint(w, encode(peerConnection.LocalDescription()))
 			fmt.Println("Sent local sd to browser")
+			waitForSessionExchange.Done()
 
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
