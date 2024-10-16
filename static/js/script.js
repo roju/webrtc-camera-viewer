@@ -19,11 +19,6 @@ pc.ontrack = function (event) {
 }
 
 pc.oniceconnectionstatechange = e => log(pc.iceConnectionState)
-pc.onicecandidate = event => {
-  if (event.candidate === null) {
-    document.getElementById('localSessionDescription').value = btoa(JSON.stringify(pc.localDescription))
-  }
-}
 
 // Offer to receive 1 video track
 pc.addTransceiver('video', {'direction': 'recvonly'})
