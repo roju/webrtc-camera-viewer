@@ -93,6 +93,8 @@ func main() {
 				return
 			}
 			defer r.Body.Close()
+			fmt.Println("recv browser sd", string(body))
+
 			offer := webrtc.SessionDescription{}
 			decode(string(body), &offer)
 
@@ -122,6 +124,7 @@ func main() {
 
 			// Send LocalDescription to browser
 			fmt.Fprint(w, encode(peerConnection.LocalDescription()))
+			fmt.Println("sent local sd")
 
 			// Unblock main()
 			waitForSessionExchange <- true
