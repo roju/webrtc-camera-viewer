@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sync"
 
 	"github.com/pion/webrtc/v4"
 )
@@ -79,19 +80,23 @@ func main() {
 		}
 	})
 
-	waitForSessionExchange := make(chan bool)
+	// waitForSessionExchange := make(chan bool)
 
 	// Serve static files (HTML, JS, CSS) from the "static" directory
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
 
+	waitForSessionExchange := sync.WaitGroup{}
+
 	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
+		waitForSessionExchange.Add(1)
 		if r.Method == http.MethodPost {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				http.Error(w, "Unable to read request", http.StatusInternalServerError)
 				return
 			}
+			defer waitForSessionExchange.Done()
 			defer r.Body.Close()
 			fmt.Println("recv browser sd", string(body))
 
@@ -122,11 +127,8 @@ func main() {
 			// in a production application you should exchange ICE Candidates via OnICECandidate
 			<-gatherComplete
 
-			// Unblock main()
-			// waitForSessionExchange <- true
-
 			// Send LocalDescription to browser
-			fmt.Fprint(w, "bar")
+			fmt.Fprint(w, encode(peerConnection.LocalDescription()))
 			// fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
 
 		} else {
@@ -140,7 +142,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	<-waitForSessionExchange
+	waitForSessionExchange.Wait()
+	fmt.Printf("Session exchange finished")
 
 	// Read RTP packets forever and send them to the WebRTC Client
 	inboundRTPPacket := make([]byte, 1600) // UDP MTU
