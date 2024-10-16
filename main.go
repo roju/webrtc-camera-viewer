@@ -97,39 +97,43 @@ func main() {
 
 			fmt.Fprint(w, "bar")
 
-			offer := webrtc.SessionDescription{}
-			decode(string(body), &offer)
+			/*
 
-			// Set the remote SessionDescription
-			if err = peerConnection.SetRemoteDescription(offer); err != nil {
-				panic(err)
-			}
+				offer := webrtc.SessionDescription{}
+				decode(string(body), &offer)
 
-			// Create answer
-			answer, err := peerConnection.CreateAnswer(nil)
-			if err != nil {
-				panic(err)
-			}
+				// Set the remote SessionDescription
+				if err = peerConnection.SetRemoteDescription(offer); err != nil {
+					panic(err)
+				}
 
-			// Create channel that is blocked until ICE Gathering is complete
-			gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+				// Create answer
+				answer, err := peerConnection.CreateAnswer(nil)
+				if err != nil {
+					panic(err)
+				}
 
-			// Sets the LocalDescription, and starts our UDP listeners
-			if err = peerConnection.SetLocalDescription(answer); err != nil {
-				panic(err)
-			}
+				// Create channel that is blocked until ICE Gathering is complete
+				gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
 
-			// Block until ICE Gathering is complete, disabling trickle ICE
-			// we do this because we only can exchange one signaling message
-			// in a production application you should exchange ICE Candidates via OnICECandidate
-			<-gatherComplete
+				// Sets the LocalDescription, and starts our UDP listeners
+				if err = peerConnection.SetLocalDescription(answer); err != nil {
+					panic(err)
+				}
 
-			// Send LocalDescription to browser
-			// fmt.Fprint(w, "bar")
-			// fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
+				// Block until ICE Gathering is complete, disabling trickle ICE
+				// we do this because we only can exchange one signaling message
+				// in a production application you should exchange ICE Candidates via OnICECandidate
+				<-gatherComplete
 
-			// Unblock main()
-			waitForSessionExchange <- true
+				// Send LocalDescription to browser
+				// fmt.Fprint(w, "bar")
+				// fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
+
+				// Unblock main()
+				waitForSessionExchange <- true
+
+			*/
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
