@@ -80,9 +80,6 @@ func main() {
 		}
 	})
 
-	// waitForSessionExchange := make(chan bool)
-
-	// Serve static files (HTML, JS, CSS) from the "static" directory
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
 
@@ -96,6 +93,7 @@ func main() {
 				http.Error(w, "Unable to read request", http.StatusInternalServerError)
 				return
 			}
+			defer waitForSessionExchange.Done()
 			defer r.Body.Close()
 			fmt.Println("recv browser sd", string(body))
 
@@ -129,20 +127,23 @@ func main() {
 			// Send LocalDescription to browser
 			fmt.Fprint(w, encode(peerConnection.LocalDescription()))
 			fmt.Println("Sent local sd to browser")
-			waitForSessionExchange.Done()
 
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
+	go sendRtpToClient(listener, videoTrack, &waitForSessionExchange)
+
 	fmt.Println("Server starting on :8080...")
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
+}
 
-	waitForSessionExchange.Wait()
+func sendRtpToClient(listener *net.UDPConn, videoTrack *webrtc.TrackLocalStaticRTP, se *sync.WaitGroup) {
+	se.Wait()
 	fmt.Println("Session exchange finished")
 
 	// Read RTP packets forever and send them to the WebRTC Client
@@ -158,7 +159,6 @@ func main() {
 				// The peerConnection has been closed.
 				return
 			}
-
 			panic(err)
 		}
 	}
