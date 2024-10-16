@@ -95,7 +95,7 @@ func main() {
 			}
 			defer waitForSessionExchange.Done()
 			defer r.Body.Close()
-			fmt.Println("recv browser sd", string(body))
+			fmt.Println("recv browser sd")
 
 			offer := webrtc.SessionDescription{}
 			decode(string(body), &offer)
