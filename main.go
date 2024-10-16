@@ -95,7 +95,7 @@ func main() {
 			}
 			defer waitForSessionExchange.Done()
 			defer r.Body.Close()
-			fmt.Println("recv browser sd")
+			fmt.Println("Received SessionDescription from browser")
 
 			offer := webrtc.SessionDescription{}
 			decode(string(body), &offer)
@@ -124,9 +124,8 @@ func main() {
 			// in a production application you should exchange ICE Candidates via OnICECandidate
 			<-gatherComplete
 
-			// Send LocalDescription to browser
 			fmt.Fprint(w, encode(peerConnection.LocalDescription()))
-			fmt.Println("Sent local sd to browser")
+			fmt.Println("Sent local SessionDescription to browser")
 
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
