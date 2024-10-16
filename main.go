@@ -95,6 +95,8 @@ func main() {
 			defer r.Body.Close()
 			fmt.Println("recv browser sd", string(body))
 
+			fmt.Fprint(w, "bar")
+
 			offer := webrtc.SessionDescription{}
 			decode(string(body), &offer)
 
@@ -123,8 +125,8 @@ func main() {
 			<-gatherComplete
 
 			// Send LocalDescription to browser
-			fmt.Fprint(w, "bar")
-			fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
+			// fmt.Fprint(w, "bar")
+			// fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
 
 			// Unblock main()
 			waitForSessionExchange <- true
