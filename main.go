@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,50 +9,11 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
-	"strings"
 
 	"github.com/pion/webrtc/v4"
 )
 
 func main() {
-	// Serve static files (HTML, JS, CSS) from the "static" directory
-	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/", fs)
-
-	// Serve the main HTML file at the root path
-	// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-	// 	http.ServeFile(w, r, "./static/main.html")
-	// })
-
-	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, "Unable to read request", http.StatusInternalServerError)
-				return
-			}
-			defer r.Body.Close()
-
-			// Check if the body contains the string "foo"
-			if string(body) == "foo" {
-				// Respond with "bar"
-				fmt.Fprint(w, "bar")
-			} else {
-				// Respond with a default message if the body is something else
-				http.Error(w, "Invalid request", http.StatusBadRequest)
-			}
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	fmt.Println("Server starting on :8080...")
-	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -119,36 +79,64 @@ func main() {
 		}
 	})
 
-	// Wait for the offer to be pasted
-	offer := webrtc.SessionDescription{}
-	decode(readUntilNewline(), &offer)
+	waitForSessionExchange := make(chan bool)
 
-	// Set the remote SessionDescription
-	if err = peerConnection.SetRemoteDescription(offer); err != nil {
-		panic(err)
-	}
+	// Serve static files (HTML, JS, CSS) from the "static" directory
+	fs := http.FileServer(http.Dir("./static"))
+	http.Handle("/", fs)
 
-	// Create answer
-	answer, err := peerConnection.CreateAnswer(nil)
+	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, "Unable to read request", http.StatusInternalServerError)
+				return
+			}
+			defer r.Body.Close()
+			offer := webrtc.SessionDescription{}
+			decode(string(body), &offer)
+
+			// Set the remote SessionDescription
+			if err = peerConnection.SetRemoteDescription(offer); err != nil {
+				panic(err)
+			}
+
+			// Create answer
+			answer, err := peerConnection.CreateAnswer(nil)
+			if err != nil {
+				panic(err)
+			}
+
+			// Create channel that is blocked until ICE Gathering is complete
+			gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+
+			// Sets the LocalDescription, and starts our UDP listeners
+			if err = peerConnection.SetLocalDescription(answer); err != nil {
+				panic(err)
+			}
+
+			// Block until ICE Gathering is complete, disabling trickle ICE
+			// we do this because we only can exchange one signaling message
+			// in a production application you should exchange ICE Candidates via OnICECandidate
+			<-gatherComplete
+
+			// Send LocalDescription to browser
+			fmt.Fprint(w, encode(peerConnection.LocalDescription()))
+
+			// Unblock main()
+			waitForSessionExchange <- true
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	fmt.Println("Server starting on :8080...")
+	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
-	// Create channel that is blocked until ICE Gathering is complete
-	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
-
-	// Sets the LocalDescription, and starts our UDP listeners
-	if err = peerConnection.SetLocalDescription(answer); err != nil {
-		panic(err)
-	}
-
-	// Block until ICE Gathering is complete, disabling trickle ICE
-	// we do this because we only can exchange one signaling message
-	// in a production application you should exchange ICE Candidates via OnICECandidate
-	<-gatherComplete
-
-	// Output the answer in base64 so we can paste it in browser
-	fmt.Println(encode(peerConnection.LocalDescription()))
+	<-waitForSessionExchange
 
 	// Read RTP packets forever and send them to the WebRTC Client
 	inboundRTPPacket := make([]byte, 1600) // UDP MTU
@@ -167,26 +155,6 @@ func main() {
 			panic(err)
 		}
 	}
-}
-
-// Read from stdin until we get a newline
-func readUntilNewline() (in string) {
-	var err error
-
-	r := bufio.NewReader(os.Stdin)
-	for {
-		in, err = r.ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
-			panic(err)
-		}
-
-		if in = strings.TrimSpace(in); len(in) > 0 {
-			break
-		}
-	}
-
-	fmt.Println("")
-	return
 }
 
 // JSON encode + base64 a SessionDescription
