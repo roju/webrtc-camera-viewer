@@ -110,7 +110,7 @@ func main() {
 			}
 
 			// Create channel that is blocked until ICE Gathering is complete
-			// gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+			gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
 
 			// Sets the LocalDescription, and starts our UDP listeners
 			if err = peerConnection.SetLocalDescription(answer); err != nil {
@@ -120,14 +120,14 @@ func main() {
 			// Block until ICE Gathering is complete, disabling trickle ICE
 			// we do this because we only can exchange one signaling message
 			// in a production application you should exchange ICE Candidates via OnICECandidate
-			// <-gatherComplete
+			<-gatherComplete
+
+			// Unblock main()
+			// waitForSessionExchange <- true
 
 			// Send LocalDescription to browser
 			fmt.Fprint(w, "bar")
 			// fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
-
-			// Unblock main()
-			// waitForSessionExchange <- true
 
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
