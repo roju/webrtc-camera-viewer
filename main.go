@@ -127,7 +127,7 @@ func main() {
 			// fmt.Println("sent local sd", encode(peerConnection.LocalDescription()))
 
 			// Unblock main()
-			waitForSessionExchange <- true
+			// waitForSessionExchange <- true
 
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
