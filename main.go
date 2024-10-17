@@ -60,7 +60,7 @@ func initCameraStream(
 ) {
 	go readIncomingRTCPPackets(rtpSender, endStream)
 	go sendRtpToClient(videoTrack, endStream)
-	runGstreamerPipeline(gstContext)
+	// runGstreamerPipeline(gstContext)
 }
 
 func initWebRTCSession(
