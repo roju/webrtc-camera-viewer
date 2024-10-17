@@ -29,7 +29,7 @@ Camera: Radxa Camera 8M 219
 2. Start the streaming server
 
     ```sh
-    ./stream.sh
+    go run
     ```
 
 3. On a separate device connected to the same network, open the webpage at `http://<Board IP Address>:8080/`

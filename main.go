@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -9,12 +10,69 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"sync"
+	"os/exec"
 
 	"github.com/pion/webrtc/v4"
 )
 
 func main() {
+	fs := http.FileServer(http.Dir("./static"))
+	http.Handle("/", fs)
+
+	endStream := make(chan bool)
+	gstContext, cancelGst := context.WithCancel(context.Background())
+	defer cancelGst()
+
+	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, "Unable to read request", http.StatusInternalServerError)
+				return
+			}
+			fmt.Println("Received SessionDescription from browser")
+
+			defer r.Body.Close()
+			offer := webrtc.SessionDescription{}
+			decode(string(body), &offer)
+
+			localSD, videoTrack, rtpSender := initWebRTCSession(&offer, endStream, cancelGst)
+			initCameraStream(rtpSender, videoTrack, gstContext, endStream)
+
+			fmt.Fprint(w, encode(localSD))
+			fmt.Println("Sent local SessionDescription to browser")
+
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	fmt.Println("Server starting on :8080...")
+	err := http.ListenAndServe(":8080", nil)
+	log.Fatal("HTTP Server error: ", err)
+}
+
+func initCameraStream(
+	rtpSender *webrtc.RTPSender,
+	videoTrack *webrtc.TrackLocalStaticRTP,
+	gstContext context.Context,
+	endStream chan bool,
+) {
+	go readIncomingRTCPPackets(rtpSender, endStream)
+	go sendRtpToClient(videoTrack, endStream)
+	runGstreamerPipeline(gstContext)
+}
+
+func initWebRTCSession(
+	offer *webrtc.SessionDescription,
+	endStream chan bool,
+	cancelGst context.CancelFunc,
+) (
+	*webrtc.SessionDescription,
+	*webrtc.TrackLocalStaticRTP,
+	*webrtc.RTPSender,
+) {
+
 	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -26,6 +84,99 @@ func main() {
 		panic(err)
 	}
 
+	// Create a video track
+	videoTrack, err := webrtc.NewTrackLocalStaticRTP(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264}, "video", "pion")
+	if err != nil {
+		panic(err)
+	}
+	rtpSender, err := peerConnection.AddTrack(videoTrack)
+	if err != nil {
+		panic(err)
+	}
+
+	// Set the handler for ICE connection state
+	// This will notify you when the peer has connected/disconnected
+	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
+		fmt.Printf("Connection State has changed %s \n", connectionState.String())
+
+		if connectionState == webrtc.ICEConnectionStateFailed {
+			endStream <- true
+			cancelGst()
+			if closeErr := peerConnection.Close(); closeErr != nil {
+				panic(closeErr)
+			}
+			fmt.Println("peerConnection closed")
+		}
+	})
+
+	// Set the remote SessionDescription
+	if err = peerConnection.SetRemoteDescription(*offer); err != nil {
+		panic(err)
+	}
+
+	// Create answer
+	answer, err := peerConnection.CreateAnswer(nil)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create channel that is blocked until ICE Gathering is complete
+	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+
+	// Sets the LocalDescription, and starts our UDP listeners
+	if err = peerConnection.SetLocalDescription(answer); err != nil {
+		panic(err)
+	}
+
+	// Block until ICE Gathering is complete, disabling trickle ICE
+	// we do this because we only can exchange one signaling message
+	// in a production application you should exchange ICE Candidates via OnICECandidate
+	<-gatherComplete
+
+	return peerConnection.LocalDescription(), videoTrack, rtpSender
+}
+
+// Before these packets are returned they are processed by interceptors. For things
+// like NACK this needs to be called.
+func readIncomingRTCPPackets(rtpSender *webrtc.RTPSender, endStream chan bool) {
+	rtcpBuf := make([]byte, 1500)
+	for {
+		select {
+		case <-endStream:
+			return
+		default:
+			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
+				return
+			}
+		}
+	}
+}
+
+func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
+	const (
+		videoWidth  = 1280
+		videoHeight = 960
+		rtpPort     = 5004
+	)
+
+	cmd := exec.CommandContext(ctx,
+		"gst-launch-1.0",
+		"v4l2src device=/dev/video0 io-mode=4",
+		fmt.Sprintf("%s%d%s%d", "! video/x-raw,width=", videoWidth, ",height=", videoHeight),
+		"! queue",
+		"! mpph264enc profile=baseline header-mode=each-idr",
+		"! rtph264pay",
+		fmt.Sprintf("%s%d", "! udpsink host=127.0.0.1 port=", rtpPort),
+	)
+	if err := cmd.Start(); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Gstreamer running...")
+	return cmd
+}
+
+func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, endStream chan bool) {
 	// Open a UDP Listener for RTP Packets on port 5004
 	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5004})
 	if err != nil {
@@ -46,119 +197,25 @@ func main() {
 		}
 	}()
 
-	// Create a video track
-	videoTrack, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264}, "video", "pion")
-	if err != nil {
-		panic(err)
-	}
-	rtpSender, err := peerConnection.AddTrack(videoTrack)
-	if err != nil {
-		panic(err)
-	}
-
-	// Read incoming RTCP packets
-	// Before these packets are returned they are processed by interceptors. For things
-	// like NACK this needs to be called.
-	go func() {
-		rtcpBuf := make([]byte, 1500)
-		for {
-			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
-				return
-			}
-		}
-	}()
-
-	// Set the handler for ICE connection state
-	// This will notify you when the peer has connected/disconnected
-	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		fmt.Printf("Connection State has changed %s \n", connectionState.String())
-
-		if connectionState == webrtc.ICEConnectionStateFailed {
-			if closeErr := peerConnection.Close(); closeErr != nil {
-				panic(closeErr)
-			}
-		}
-	})
-
-	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/", fs)
-
-	waitForSessionExchange := sync.WaitGroup{}
-	waitForSessionExchange.Add(1)
-
-	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, "Unable to read request", http.StatusInternalServerError)
-				return
-			}
-			defer waitForSessionExchange.Done()
-			defer r.Body.Close()
-			fmt.Println("Received SessionDescription from browser")
-
-			offer := webrtc.SessionDescription{}
-			decode(string(body), &offer)
-
-			// Set the remote SessionDescription
-			if err = peerConnection.SetRemoteDescription(offer); err != nil {
-				panic(err)
-			}
-
-			// Create answer
-			answer, err := peerConnection.CreateAnswer(nil)
-			if err != nil {
-				panic(err)
-			}
-
-			// Create channel that is blocked until ICE Gathering is complete
-			gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
-
-			// Sets the LocalDescription, and starts our UDP listeners
-			if err = peerConnection.SetLocalDescription(answer); err != nil {
-				panic(err)
-			}
-
-			// Block until ICE Gathering is complete, disabling trickle ICE
-			// we do this because we only can exchange one signaling message
-			// in a production application you should exchange ICE Candidates via OnICECandidate
-			<-gatherComplete
-
-			fmt.Fprint(w, encode(peerConnection.LocalDescription()))
-			fmt.Println("Sent local SessionDescription to browser")
-
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	go sendRtpToClient(listener, videoTrack, &waitForSessionExchange)
-
-	fmt.Println("Server starting on :8080...")
-	err = http.ListenAndServe(":8080", nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func sendRtpToClient(listener *net.UDPConn, videoTrack *webrtc.TrackLocalStaticRTP, se *sync.WaitGroup) {
-	se.Wait()
-	fmt.Println("Session exchange finished")
-
 	// Read RTP packets forever and send them to the WebRTC Client
 	inboundRTPPacket := make([]byte, 1600) // UDP MTU
 	for {
-		n, _, err := listener.ReadFrom(inboundRTPPacket)
-		if err != nil {
-			panic(fmt.Sprintf("error during read: %s", err))
-		}
-
-		if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
-			if errors.Is(err, io.ErrClosedPipe) {
-				// The peerConnection has been closed.
-				return
+		select {
+		case <-endStream:
+			return
+		default:
+			n, _, err := listener.ReadFrom(inboundRTPPacket)
+			if err != nil {
+				panic(fmt.Sprintf("error during read: %s", err))
 			}
-			panic(err)
+
+			if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
+				if errors.Is(err, io.ErrClosedPipe) {
+					// The peerConnection has been closed.
+					return
+				}
+				panic(err)
+			}
 		}
 	}
 }
