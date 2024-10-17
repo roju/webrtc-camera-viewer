@@ -32,6 +32,7 @@ func main() {
 			}
 			fmt.Println("Received SessionDescription from browser")
 
+			endStream <- false
 			defer r.Body.Close()
 			offer := webrtc.SessionDescription{}
 			decode(string(body), &offer)
