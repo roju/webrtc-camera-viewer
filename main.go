@@ -161,7 +161,7 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 		fmt.Sprintf("! udpsink host=127.0.0.1 port=%d", rtpPort),
 	)
 
-	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
 
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
@@ -169,7 +169,7 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 
 	fmt.Println("Gstreamer running...")
 
-	scanner := bufio.NewScanner(stdout)
+	scanner := bufio.NewScanner(stderr)
 	scanner.Split(bufio.ScanWords)
 	for scanner.Scan() {
 		m := scanner.Text()
