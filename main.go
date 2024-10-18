@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -152,50 +151,31 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 	)
 
 	args := []string{
-		"v4l2src",
-		"device=/dev/video0",
-		"io-mode=4",
-		"!",
-		"video/x-raw,width=1280,height=960",
-		"!",
-		"queue",
-		"!",
-		"mpph264enc",
-		"profile=baseline",
-		"header-mode=each-idr",
-		"!",
-		"rtph264pay",
-		"!",
-		"udpsink",
-		"host=127.0.0.1",
-		"port=5004",
+		"v4l2src", "device=/dev/video0", "io-mode=4",
+		"!", fmt.Sprintf("video/x-raw,width=%d,height=%d", videoWidth, videoHeight),
+		"!", "queue",
+		"!", "mpph264enc", "profile=baseline", "header-mode=each-idr",
+		"!", "rtph264pay",
+		"!", "udpsink", "host=127.0.0.1",
+		fmt.Sprintf("port=%d", rtpPort),
 	}
-
-	// pipeline := fmt.Sprintf("v4l2src device=/dev/video0 io-mode=4"+
-	// 	" ! video/x-raw, width=%d, height=%d"+
-	// 	" ! queue"+
-	// 	" ! mpph264enc profile=baseline header-mode=each-idr"+
-	// 	" ! rtph264pay"+
-	// 	" ! udpsink host=127.0.0.1 port=%d",
-	// 	videoWidth, videoHeight, rtpPort)
 
 	cmd := exec.CommandContext(ctx, "gst-launch-1.0", args...)
 
-	stderr, _ := cmd.StderrPipe()
+	// stderr, _ := cmd.StderrPipe()
 
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
-
 	fmt.Println("Gstreamer running...")
 
-	scanner := bufio.NewScanner(stderr)
-	scanner.Split(bufio.ScanWords)
-	for scanner.Scan() {
-		m := scanner.Text()
-		fmt.Println(m)
-	}
-	cmd.Wait()
+	// scanner := bufio.NewScanner(stderr)
+	// scanner.Split(bufio.ScanWords)
+	// for scanner.Scan() {
+	// 	m := scanner.Text()
+	// 	fmt.Println(m)
+	// }
+	// cmd.Wait()
 
 	return cmd
 }
