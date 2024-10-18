@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -159,10 +160,23 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 		"! rtph264pay",
 		fmt.Sprintf("! udpsink host=127.0.0.1 port=%d", rtpPort),
 	)
+
+	stdout, _ := cmd.StdoutPipe()
+
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
+
 	fmt.Println("Gstreamer running...")
+
+	scanner := bufio.NewScanner(stdout)
+	scanner.Split(bufio.ScanWords)
+	for scanner.Scan() {
+		m := scanner.Text()
+		fmt.Println(m)
+	}
+	cmd.Wait()
+
 	return cmd
 }
 
