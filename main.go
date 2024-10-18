@@ -214,6 +214,7 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, endStream chan bool
 	for {
 		select {
 		case <-endStream:
+			fmt.Println("sendRtpToClient recv endStream signal")
 			return
 		default:
 			n, _, err := listener.ReadFrom(inboundRTPPacket)
@@ -224,12 +225,15 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, endStream chan bool
 			if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
 				if errors.Is(err, io.ErrClosedPipe) {
 					// The peerConnection has been closed.
-					return
+					fmt.Println("UDP listener ErrClosedPipe")
+					goto Exit
 				}
 				panic(err)
 			}
 		}
 	}
+Exit:
+	fmt.Println("sendRtpToClient returned")
 }
 
 // JSON encode + base64 a SessionDescription
