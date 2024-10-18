@@ -221,12 +221,13 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, sessionContext cont
 			fmt.Println("sendRtpToClient recv sessionContext.Done()")
 			return
 		default:
+			fmt.Println("sendRtpToClient about to readFrom")
 			n, _, err := listener.ReadFrom(inboundRTPPacket)
 			if err != nil {
 				fmt.Println("sendRtpToClient ReadFrom() error")
 				panic(fmt.Sprintf("error during read: %s", err))
 			}
-
+			fmt.Println("sendRtpToClient about to write")
 			if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
 				if errors.Is(err, io.ErrClosedPipe) {
 					// The peerConnection has been closed.
