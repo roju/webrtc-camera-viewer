@@ -206,6 +206,7 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, endStream chan bool
 		if err = listener.Close(); err != nil {
 			panic(err)
 		}
+		fmt.Println("UDP listener closed")
 	}()
 
 	// Read RTP packets forever and send them to the WebRTC Client
