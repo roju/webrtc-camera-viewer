@@ -19,7 +19,6 @@ func main() {
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", fs)
 
-	endStream := make(chan bool)
 	gstContext, cancelGst := context.WithCancel(context.Background())
 	defer cancelGst()
 
@@ -39,11 +38,12 @@ func main() {
 		offer := webrtc.SessionDescription{}
 		decode(string(body), &offer)
 
+		sessionContext, cancelSession := context.WithCancel(context.Background())
 		peerConnection, videoTrack, rtpSender := initWebRTCSession(&offer)
-		go readIncomingRTCPPackets(rtpSender, endStream)
-		go sendRtpToClient(videoTrack, endStream)
+		go readIncomingRTCPPackets(rtpSender, sessionContext)
+		go sendRtpToClient(videoTrack, sessionContext)
 		gstHandle := runGstreamerPipeline(gstContext)
-		handleICEConnectionState(peerConnection, endStream, gstHandle)
+		handleICEConnectionState(peerConnection, cancelSession, gstHandle)
 
 		fmt.Fprint(w, encode(peerConnection.LocalDescription()))
 		fmt.Println("Sent local SessionDescription to browser")
@@ -111,7 +111,7 @@ func initWebRTCSession(offer *webrtc.SessionDescription) (
 
 func handleICEConnectionState(
 	peerConnection *webrtc.PeerConnection,
-	endStream chan bool,
+	cancelSession context.CancelFunc,
 	gstHandle *exec.Cmd,
 ) {
 	// Set the handler for ICE connection state
@@ -129,21 +129,24 @@ func handleICEConnectionState(
 				panic(closeErr)
 			}
 			fmt.Println("peerConnection closed")
-			endStream <- true
+			cancelSession()
+			fmt.Println("cancelSession called")
 		}
 	})
 }
 
 // Before these packets are returned they are processed by interceptors. For things
 // like NACK this needs to be called.
-func readIncomingRTCPPackets(rtpSender *webrtc.RTPSender, endStream chan bool) {
+func readIncomingRTCPPackets(rtpSender *webrtc.RTPSender, sessionContext context.Context) {
 	rtcpBuf := make([]byte, 1500)
 	for {
 		select {
-		case <-endStream:
+		case <-sessionContext.Done():
+			fmt.Println("readIncomingRTCPPackets recv sessionContext.Done()")
 			return
 		default:
 			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
+				fmt.Println("readIncomingRTCPPackets rtpSender.Read error")
 				return
 			}
 		}
@@ -187,7 +190,7 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 	return cmd
 }
 
-func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, endStream chan bool) {
+func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, sessionContext context.Context) {
 	// Open a UDP Listener for RTP Packets on port 5004
 	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5004})
 	if err != nil {
@@ -203,6 +206,7 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, endStream chan bool
 	}
 
 	defer func() {
+		fmt.Println("sendRtpToClient defer func called")
 		if err = listener.Close(); err != nil {
 			panic(err)
 		}
@@ -213,8 +217,8 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, endStream chan bool
 	inboundRTPPacket := make([]byte, 1600) // UDP MTU
 	for {
 		select {
-		case <-endStream:
-			fmt.Println("sendRtpToClient recv endStream signal")
+		case <-sessionContext.Done():
+			fmt.Println("sendRtpToClient recv sessionContext.Done()")
 			return
 		default:
 			n, _, err := listener.ReadFrom(inboundRTPPacket)
@@ -226,14 +230,12 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, endStream chan bool
 				if errors.Is(err, io.ErrClosedPipe) {
 					// The peerConnection has been closed.
 					fmt.Println("UDP listener ErrClosedPipe")
-					goto Exit
+					return
 				}
 				panic(err)
 			}
 		}
 	}
-Exit:
-	fmt.Println("sendRtpToClient returned")
 }
 
 // JSON encode + base64 a SessionDescription
