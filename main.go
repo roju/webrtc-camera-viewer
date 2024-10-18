@@ -159,9 +159,9 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 	// 	" ! udpsink host=127.0.0.1 port=%d",
 	// 	videoWidth, videoHeight, rtpPort)
 
-	pipeline := "v4l2src device=/dev/video0 io-mode=4 ! video/x-raw,width=1280,height=960 ! queue ! mpph264enc profile=baseline header-mode=each-idr ! rtph264pay ! udpsink host=127.0.0.1 port=5004"
+	pipeline := "gst-launch-1.0 v4l2src device=/dev/video0 io-mode=4 ! video/x-raw,width=1280,height=960 ! queue ! mpph264enc profile=baseline header-mode=each-idr ! rtph264pay ! udpsink host=127.0.0.1 port=5004"
 
-	cmd := exec.CommandContext(ctx, "gst-launch-1.0", pipeline)
+	cmd := exec.CommandContext(ctx, pipeline)
 
 	stderr, _ := cmd.StderrPipe()
 
