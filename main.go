@@ -39,12 +39,13 @@ func main() {
 		offer := webrtc.SessionDescription{}
 		decode(string(body), &offer)
 
-		localSD, videoTrack, rtpSender := initWebRTCSession(&offer, endStream, cancelGst)
+		peerConnection, videoTrack, rtpSender := initWebRTCSession(&offer)
+		handleICEConnectionState(peerConnection, endStream, cancelGst)
 		go readIncomingRTCPPackets(rtpSender, endStream)
 		go sendRtpToClient(videoTrack, endStream)
 		runGstreamerPipeline(gstContext)
 
-		fmt.Fprint(w, encode(localSD))
+		fmt.Fprint(w, encode(peerConnection.LocalDescription()))
 		fmt.Println("Sent local SessionDescription to browser")
 	})
 
@@ -53,16 +54,11 @@ func main() {
 	log.Fatal("HTTP Server error: ", err)
 }
 
-func initWebRTCSession(
-	offer *webrtc.SessionDescription,
-	endStream chan bool,
-	cancelGst context.CancelFunc,
-) (
-	*webrtc.SessionDescription,
+func initWebRTCSession(offer *webrtc.SessionDescription) (
+	*webrtc.PeerConnection,
 	*webrtc.TrackLocalStaticRTP,
 	*webrtc.RTPSender,
 ) {
-
 	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -84,21 +80,6 @@ func initWebRTCSession(
 	if err != nil {
 		panic(err)
 	}
-
-	// Set the handler for ICE connection state
-	// This will notify you when the peer has connected/disconnected
-	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		fmt.Printf("Connection State has changed %s \n", connectionState.String())
-
-		if connectionState == webrtc.ICEConnectionStateFailed {
-			endStream <- true
-			cancelGst()
-			if closeErr := peerConnection.Close(); closeErr != nil {
-				panic(closeErr)
-			}
-			fmt.Println("peerConnection closed")
-		}
-	})
 
 	// Set the remote SessionDescription
 	if err = peerConnection.SetRemoteDescription(*offer); err != nil {
@@ -124,7 +105,28 @@ func initWebRTCSession(
 	// in a production application you should exchange ICE Candidates via OnICECandidate
 	<-gatherComplete
 
-	return peerConnection.LocalDescription(), videoTrack, rtpSender
+	return peerConnection, videoTrack, rtpSender
+}
+
+func handleICEConnectionState(
+	peerConnection *webrtc.PeerConnection,
+	endStream chan bool,
+	cancelGst context.CancelFunc,
+) {
+	// Set the handler for ICE connection state
+	// This will notify you when the peer has connected/disconnected
+	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
+		fmt.Printf("Connection State has changed %s \n", connectionState.String())
+
+		if connectionState == webrtc.ICEConnectionStateClosed {
+			endStream <- true
+			cancelGst()
+			if closeErr := peerConnection.Close(); closeErr != nil {
+				panic(closeErr)
+			}
+			fmt.Println("peerConnection closed")
+		}
+	})
 }
 
 // Before these packets are returned they are processed by interceptors. For things
