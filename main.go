@@ -234,6 +234,7 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, sessionContext cont
 				}
 				panic(err)
 			}
+			fmt.Println("inboundRTPPacket written to videoTrack")
 		}
 	}
 }
