@@ -151,13 +151,15 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 		rtpPort     = 5004
 	)
 
-	pipeline := fmt.Sprintf("v4l2src device=/dev/video0 io-mode=4"+
-		" ! video/x-raw, width=%d, height=%d"+
-		" ! queue"+
-		" ! mpph264enc profile=baseline header-mode=each-idr"+
-		" ! rtph264pay"+
-		" ! udpsink host=127.0.0.1 port=%d",
-		videoWidth, videoHeight, rtpPort)
+	// pipeline := fmt.Sprintf("v4l2src device=/dev/video0 io-mode=4"+
+	// 	" ! video/x-raw, width=%d, height=%d"+
+	// 	" ! queue"+
+	// 	" ! mpph264enc profile=baseline header-mode=each-idr"+
+	// 	" ! rtph264pay"+
+	// 	" ! udpsink host=127.0.0.1 port=%d",
+	// 	videoWidth, videoHeight, rtpPort)
+
+	pipeline := "v4l2src device=/dev/video0 io-mode=4 ! video/x-raw,width=1280,height=960 ! queue ! mpph264enc profile=baseline header-mode=each-idr ! rtph264pay ! udpsink host=127.0.0.1 port=5004"
 
 	cmd := exec.CommandContext(ctx, "gst-launch-1.0", pipeline)
 
