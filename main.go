@@ -40,10 +40,10 @@ func main() {
 		decode(string(body), &offer)
 
 		peerConnection, videoTrack, rtpSender := initWebRTCSession(&offer)
-		handleICEConnectionState(peerConnection, endStream, cancelGst)
 		go readIncomingRTCPPackets(rtpSender, endStream)
 		go sendRtpToClient(videoTrack, endStream)
-		runGstreamerPipeline(gstContext)
+		gstHandle := runGstreamerPipeline(gstContext)
+		handleICEConnectionState(peerConnection, endStream, gstHandle)
 
 		fmt.Fprint(w, encode(peerConnection.LocalDescription()))
 		fmt.Println("Sent local SessionDescription to browser")
@@ -105,13 +105,14 @@ func initWebRTCSession(offer *webrtc.SessionDescription) (
 	// in a production application you should exchange ICE Candidates via OnICECandidate
 	<-gatherComplete
 
+	fmt.Println("WebRTC session initialized")
 	return peerConnection, videoTrack, rtpSender
 }
 
 func handleICEConnectionState(
 	peerConnection *webrtc.PeerConnection,
 	endStream chan bool,
-	cancelGst context.CancelFunc,
+	gstHandle *exec.Cmd,
 ) {
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
@@ -119,12 +120,16 @@ func handleICEConnectionState(
 		fmt.Printf("Connection State has changed %s \n", connectionState.String())
 
 		if connectionState == webrtc.ICEConnectionStateClosed {
-			endStream <- true
-			cancelGst()
+			if err := gstHandle.Process.Kill(); err != nil {
+				fmt.Println("Failed to terminate Gstreamer: ", err)
+			} else {
+				fmt.Println("Terminated Gstreamer")
+			}
 			if closeErr := peerConnection.Close(); closeErr != nil {
 				panic(closeErr)
 			}
 			fmt.Println("peerConnection closed")
+			endStream <- true
 		}
 	})
 }
