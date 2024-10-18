@@ -24,43 +24,33 @@ func main() {
 	defer cancelGst()
 
 	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, "Unable to read request", http.StatusInternalServerError)
-				return
-			}
-			fmt.Println("Received SessionDescription from browser")
-
-			defer r.Body.Close()
-			offer := webrtc.SessionDescription{}
-			decode(string(body), &offer)
-
-			localSD, videoTrack, rtpSender := initWebRTCSession(&offer, endStream, cancelGst)
-			initCameraStream(rtpSender, videoTrack, gstContext, endStream)
-
-			fmt.Fprint(w, encode(localSD))
-			fmt.Println("Sent local SessionDescription to browser")
-
-		} else {
+		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
 		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Unable to read request", http.StatusInternalServerError)
+			return
+		}
+		fmt.Println("Received SessionDescription from browser")
+
+		defer r.Body.Close()
+		offer := webrtc.SessionDescription{}
+		decode(string(body), &offer)
+
+		localSD, videoTrack, rtpSender := initWebRTCSession(&offer, endStream, cancelGst)
+		go readIncomingRTCPPackets(rtpSender, endStream)
+		go sendRtpToClient(videoTrack, endStream)
+		runGstreamerPipeline(gstContext)
+
+		fmt.Fprint(w, encode(localSD))
+		fmt.Println("Sent local SessionDescription to browser")
 	})
 
 	fmt.Println("Server starting on :8080...")
 	err := http.ListenAndServe(":8080", nil)
 	log.Fatal("HTTP Server error: ", err)
-}
-
-func initCameraStream(
-	rtpSender *webrtc.RTPSender,
-	videoTrack *webrtc.TrackLocalStaticRTP,
-	gstContext context.Context,
-	endStream chan bool,
-) {
-	go readIncomingRTCPPackets(rtpSender, endStream)
-	go sendRtpToClient(videoTrack, endStream)
-	// runGstreamerPipeline(gstContext)
 }
 
 func initWebRTCSession(
@@ -163,11 +153,11 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 	cmd := exec.CommandContext(ctx,
 		"gst-launch-1.0",
 		"v4l2src device=/dev/video0 io-mode=4",
-		fmt.Sprintf("%s%d%s%d", "! video/x-raw,width=", videoWidth, ",height=", videoHeight),
+		fmt.Sprintf("! video/x-raw,width=%d,height=%d", videoWidth, videoHeight),
 		"! queue",
 		"! mpph264enc profile=baseline header-mode=each-idr",
 		"! rtph264pay",
-		fmt.Sprintf("%s%d", "! udpsink host=127.0.0.1 port=", rtpPort),
+		fmt.Sprintf("! udpsink host=127.0.0.1 port=%d", rtpPort),
 	)
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
