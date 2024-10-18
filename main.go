@@ -223,6 +223,7 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, sessionContext cont
 		default:
 			n, _, err := listener.ReadFrom(inboundRTPPacket)
 			if err != nil {
+				fmt.Println("sendRtpToClient ReadFrom() error")
 				panic(fmt.Sprintf("error during read: %s", err))
 			}
 
@@ -232,6 +233,7 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, sessionContext cont
 					fmt.Println("UDP listener ErrClosedPipe")
 					return
 				}
+				fmt.Println("sendRtpToClient videoTrack.Write() error")
 				panic(err)
 			}
 			fmt.Println("inboundRTPPacket written to videoTrack")
