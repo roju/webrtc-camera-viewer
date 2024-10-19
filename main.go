@@ -50,7 +50,7 @@ func main() {
 		listener := initUDPListener()
 		go sendRtpToClient(videoTrack, listener)
 		gstHandle := runGstreamerPipeline(gstContext)
-		handleICEConnectionState(peerConnection, gstHandle, listener, streamInProgress)
+		handleICEConnectionState(peerConnection, gstHandle, listener, &streamInProgress)
 		streamInProgress = true
 
 		fmt.Fprint(w, encode(peerConnection.LocalDescription()))
@@ -121,7 +121,7 @@ func handleICEConnectionState(
 	peerConnection *webrtc.PeerConnection,
 	gstHandle *exec.Cmd,
 	listener *net.UDPConn,
-	streamInProgress bool,
+	streamInProgress *bool,
 ) {
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
@@ -148,7 +148,7 @@ func handleICEConnectionState(
 			} else {
 				fmt.Println("UDP listener closed")
 			}
-			streamInProgress = false
+			*streamInProgress = false
 		}
 	})
 }
