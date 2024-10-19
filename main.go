@@ -38,13 +38,12 @@ func main() {
 		offer := webrtc.SessionDescription{}
 		decode(string(body), &offer)
 
-		sessionContext, cancelSession := context.WithCancel(context.Background())
 		peerConnection, videoTrack, rtpSender := initWebRTCSession(&offer)
-		go readIncomingRTCPPackets(rtpSender, sessionContext)
+		go readIncomingRTCPPackets(rtpSender)
 		listener := initUDPListener()
-		go sendRtpToClient(videoTrack, listener, sessionContext)
+		go sendRtpToClient(videoTrack, listener)
 		gstHandle := runGstreamerPipeline(gstContext)
-		handleICEConnectionState(peerConnection, cancelSession, gstHandle, listener)
+		handleICEConnectionState(peerConnection, gstHandle, listener)
 
 		fmt.Fprint(w, encode(peerConnection.LocalDescription()))
 		fmt.Println("Sent local SessionDescription to browser")
@@ -112,7 +111,6 @@ func initWebRTCSession(offer *webrtc.SessionDescription) (
 
 func handleICEConnectionState(
 	peerConnection *webrtc.PeerConnection,
-	cancelSession context.CancelFunc,
 	gstHandle *exec.Cmd,
 	listener *net.UDPConn,
 ) {
@@ -135,26 +133,18 @@ func handleICEConnectionState(
 				panic(err)
 			}
 			fmt.Println("UDP listener closed")
-			cancelSession()
-			fmt.Println("cancelSession called")
 		}
 	})
 }
 
 // Before these packets are returned they are processed by interceptors. For things
 // like NACK this needs to be called.
-func readIncomingRTCPPackets(rtpSender *webrtc.RTPSender, sessionContext context.Context) {
+func readIncomingRTCPPackets(rtpSender *webrtc.RTPSender) {
 	rtcpBuf := make([]byte, 1500)
 	for {
-		select {
-		case <-sessionContext.Done():
-			fmt.Println("readIncomingRTCPPackets recv sessionContext.Done()")
+		if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
+			// fmt.Println("rtpSender.Read error", rtcpErr)
 			return
-		default:
-			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
-				// fmt.Println("rtpSender.Read error", rtcpErr)
-				return
-			}
 		}
 	}
 }
@@ -214,33 +204,24 @@ func initUDPListener() *net.UDPConn {
 	return listener
 }
 
-func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPConn, sessionContext context.Context) {
-	defer func() {
-		if err := listener.Close(); err != nil {
-			fmt.Println("sendRtpToClient listener close error", err)
-		}
-	}()
+func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPConn) {
+	defer listener.Close()
+
 	// Read RTP packets and send them to the WebRTC Client
 	inboundRTPPacket := make([]byte, 1600) // UDP MTU
 	for {
-		select {
-		case <-sessionContext.Done():
-			fmt.Println("sendRtpToClient recv sessionContext.Done()")
+		n, _, err := listener.ReadFrom(inboundRTPPacket)
+		if err != nil {
+			// fmt.Println("UDPConn error during read:", err)
 			return
-		default:
-			n, _, err := listener.ReadFrom(inboundRTPPacket)
-			if err != nil {
-				// fmt.Println("UDPConn error during read:", err)
+		}
+		if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
+			if errors.Is(err, io.ErrClosedPipe) {
+				fmt.Println("TrackLocalStaticRTP ErrClosedPipe")
 				return
 			}
-			if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
-				if errors.Is(err, io.ErrClosedPipe) {
-					fmt.Println("TrackLocalStaticRTP ErrClosedPipe")
-					return
-				}
-				fmt.Println("sendRtpToClient videoTrack.Write() error")
-				panic(err)
-			}
+			fmt.Println("sendRtpToClient videoTrack.Write() error")
+			panic(err)
 		}
 	}
 }
