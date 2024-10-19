@@ -152,7 +152,8 @@ func readIncomingRTCPPackets(rtpSender *webrtc.RTPSender, sessionContext context
 			return
 		default:
 			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
-				fmt.Println("rtpSender.Read error", rtcpErr)
+				// fmt.Println("rtpSender.Read error", rtcpErr)
+				return
 			}
 		}
 	}
@@ -214,6 +215,11 @@ func initUDPListener() *net.UDPConn {
 }
 
 func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPConn, sessionContext context.Context) {
+	defer func() {
+		if err := listener.Close(); err != nil {
+			fmt.Println("sendRtpToClient listener close error", err)
+		}
+	}()
 	// Read RTP packets and send them to the WebRTC Client
 	inboundRTPPacket := make([]byte, 1600) // UDP MTU
 	for {
@@ -224,8 +230,8 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPCo
 		default:
 			n, _, err := listener.ReadFrom(inboundRTPPacket)
 			if err != nil {
-				fmt.Println("UDPConn error during read:", err)
-				continue
+				// fmt.Println("UDPConn error during read:", err)
+				return
 			}
 			if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
 				if errors.Is(err, io.ErrClosedPipe) {
