@@ -41,9 +41,10 @@ func main() {
 		sessionContext, cancelSession := context.WithCancel(context.Background())
 		peerConnection, videoTrack, rtpSender := initWebRTCSession(&offer)
 		go readIncomingRTCPPackets(rtpSender, sessionContext)
-		go sendRtpToClient(videoTrack, sessionContext)
+		listener := initUDPListener()
+		go sendRtpToClient(videoTrack, listener, sessionContext)
 		gstHandle := runGstreamerPipeline(gstContext)
-		handleICEConnectionState(peerConnection, cancelSession, gstHandle)
+		handleICEConnectionState(peerConnection, cancelSession, gstHandle, listener)
 
 		fmt.Fprint(w, encode(peerConnection.LocalDescription()))
 		fmt.Println("Sent local SessionDescription to browser")
@@ -113,6 +114,7 @@ func handleICEConnectionState(
 	peerConnection *webrtc.PeerConnection,
 	cancelSession context.CancelFunc,
 	gstHandle *exec.Cmd,
+	listener *net.UDPConn,
 ) {
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
@@ -125,10 +127,14 @@ func handleICEConnectionState(
 			} else {
 				fmt.Println("Terminated Gstreamer")
 			}
-			if closeErr := peerConnection.Close(); closeErr != nil {
-				panic(closeErr)
+			if err := peerConnection.Close(); err != nil {
+				panic(err)
 			}
 			fmt.Println("peerConnection closed")
+			if err := listener.Close(); err != nil {
+				panic(err)
+			}
+			fmt.Println("UDP listener closed")
 			cancelSession()
 			fmt.Println("cancelSession called")
 		}
@@ -190,7 +196,7 @@ func runGstreamerPipeline(ctx context.Context) *exec.Cmd {
 	return cmd
 }
 
-func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, sessionContext context.Context) {
+func initUDPListener() *net.UDPConn {
 	// Open a UDP Listener for RTP Packets on port 5004
 	listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5004})
 	if err != nil {
@@ -205,15 +211,11 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, sessionContext cont
 		panic(err)
 	}
 
-	defer func() {
-		fmt.Println("sendRtpToClient defer func called")
-		if err = listener.Close(); err != nil {
-			panic(err)
-		}
-		fmt.Println("UDP listener closed")
-	}()
+	return listener
+}
 
-	// Read RTP packets forever and send them to the WebRTC Client
+func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPConn, sessionContext context.Context) {
+	// Read RTP packets and send them to the WebRTC Client
 	inboundRTPPacket := make([]byte, 1600) // UDP MTU
 	for {
 		select {
