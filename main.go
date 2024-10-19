@@ -21,10 +21,16 @@ func main() {
 
 	gstContext, cancelGst := context.WithCancel(context.Background())
 	defer cancelGst()
+	var streamInProgress bool = false
 
 	http.HandleFunc("/post", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if streamInProgress {
+			fmt.Println("Attempted new session while stream in progress")
+			http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		body, err := io.ReadAll(r.Body)
@@ -43,7 +49,8 @@ func main() {
 		listener := initUDPListener()
 		go sendRtpToClient(videoTrack, listener)
 		gstHandle := runGstreamerPipeline(gstContext)
-		handleICEConnectionState(peerConnection, gstHandle, listener)
+		handleICEConnectionState(peerConnection, gstHandle, listener, streamInProgress)
+		streamInProgress = true
 
 		fmt.Fprint(w, encode(peerConnection.LocalDescription()))
 		fmt.Println("Sent local SessionDescription to browser")
@@ -113,13 +120,16 @@ func handleICEConnectionState(
 	peerConnection *webrtc.PeerConnection,
 	gstHandle *exec.Cmd,
 	listener *net.UDPConn,
+	streamInProgress bool,
 ) {
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		fmt.Printf("Connection State has changed %s \n", connectionState.String())
 
-		if connectionState == webrtc.ICEConnectionStateClosed {
+		if connectionState == webrtc.ICEConnectionStateClosed ||
+			connectionState == webrtc.ICEConnectionStateDisconnected ||
+			connectionState == webrtc.ICEConnectionStateFailed {
 			if err := gstHandle.Process.Kill(); err != nil {
 				fmt.Println("Failed to terminate Gstreamer: ", err)
 			} else {
@@ -133,6 +143,7 @@ func handleICEConnectionState(
 				panic(err)
 			}
 			fmt.Println("UDP listener closed")
+			streamInProgress = false
 		}
 	})
 }
