@@ -142,10 +142,9 @@ func handleICEConnectionState(
 			fmt.Println("peerConnection closed")
 
 			if err := listener.Close(); err != nil {
-				if strings.Contains(err.Error(), "use of closed network connection") {
-					return
+				if !strings.Contains(err.Error(), "use of closed network connection") {
+					fmt.Println("OnICEConnectionStateChange listener.Close() error:", err)
 				}
-				fmt.Println("OnICEConnectionStateChange listener.Close() error:", err)
 			} else {
 				fmt.Println("UDP listener closed")
 			}
@@ -224,10 +223,9 @@ func initUDPListener() *net.UDPConn {
 func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPConn) {
 	defer func() {
 		if err := listener.Close(); err != nil {
-			if strings.Contains(err.Error(), "use of closed network connection") {
-				return
+			if !strings.Contains(err.Error(), "use of closed network connection") {
+				fmt.Println("sendRtpToClient listener.Close() error:", err)
 			}
-			fmt.Println("sendRtpToClient listener.Close() error:", err)
 		} else {
 			fmt.Println("UDP listener closed")
 		}
