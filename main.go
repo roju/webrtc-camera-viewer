@@ -131,6 +131,9 @@ func handleICEConnectionState(
 		if connectionState == webrtc.ICEConnectionStateClosed ||
 			connectionState == webrtc.ICEConnectionStateDisconnected ||
 			connectionState == webrtc.ICEConnectionStateFailed {
+			if !*streamInProgress {
+				return
+			}
 			if err := gstHandle.Process.Kill(); err != nil {
 				fmt.Println("Failed to terminate Gstreamer: ", err)
 			} else {
