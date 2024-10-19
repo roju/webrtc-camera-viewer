@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
+	"strings"
 
 	"github.com/pion/webrtc/v4"
 )
@@ -139,10 +140,15 @@ func handleICEConnectionState(
 				panic(err)
 			}
 			fmt.Println("peerConnection closed")
+
 			if err := listener.Close(); err != nil {
-				panic(err)
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					return
+				}
+				fmt.Println("OnICEConnectionStateChange listener.Close() error:", err)
+			} else {
+				fmt.Println("UDP listener closed")
 			}
-			fmt.Println("UDP listener closed")
 			streamInProgress = false
 		}
 	})
@@ -216,7 +222,16 @@ func initUDPListener() *net.UDPConn {
 }
 
 func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPConn) {
-	defer listener.Close()
+	defer func() {
+		if err := listener.Close(); err != nil {
+			if strings.Contains(err.Error(), "use of closed network connection") {
+				return
+			}
+			fmt.Println("sendRtpToClient listener.Close() error:", err)
+		} else {
+			fmt.Println("UDP listener closed")
+		}
+	}()
 
 	// Read RTP packets and send them to the WebRTC Client
 	inboundRTPPacket := make([]byte, 1600) // UDP MTU
