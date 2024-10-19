@@ -152,8 +152,7 @@ func readIncomingRTCPPackets(rtpSender *webrtc.RTPSender, sessionContext context
 			return
 		default:
 			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
-				fmt.Println("readIncomingRTCPPackets rtpSender.Read error")
-				return
+				fmt.Println("rtpSender.Read error", rtcpErr)
 			}
 		}
 	}
@@ -223,23 +222,19 @@ func sendRtpToClient(videoTrack *webrtc.TrackLocalStaticRTP, listener *net.UDPCo
 			fmt.Println("sendRtpToClient recv sessionContext.Done()")
 			return
 		default:
-			fmt.Println("sendRtpToClient about to readFrom")
 			n, _, err := listener.ReadFrom(inboundRTPPacket)
 			if err != nil {
-				fmt.Println("sendRtpToClient ReadFrom() error")
-				panic(fmt.Sprintf("error during read: %s", err))
+				fmt.Println("UDPConn error during read:", err)
+				continue
 			}
-			fmt.Println("sendRtpToClient about to write")
 			if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
 				if errors.Is(err, io.ErrClosedPipe) {
-					// The peerConnection has been closed.
-					fmt.Println("UDP listener ErrClosedPipe")
+					fmt.Println("TrackLocalStaticRTP ErrClosedPipe")
 					return
 				}
 				fmt.Println("sendRtpToClient videoTrack.Write() error")
 				panic(err)
 			}
-			fmt.Println("inboundRTPPacket written to videoTrack")
 		}
 	}
 }
